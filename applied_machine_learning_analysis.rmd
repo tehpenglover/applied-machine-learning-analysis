@@ -1,0 +1,926 @@
+---
+title: "applied machine learning analysis on real world data
+date: "2026-02-27"
+---
+# Setting up
+## Load Required Libraries
+```{r}
+library(arm)
+library(caTools)
+library(caret)
+library(class)
+library(cluster)
+library(corrplot)
+library(dendextend)
+library(dplyr)
+library(e1071)
+library(factoextra)
+library(ggcorrplot)
+library(ggplot2)
+library(GGally)
+library(glmnet)
+library(gridExtra)
+library(knitr)
+library(pROC)
+library(randomForest)
+library(rpart)
+library(rpart.plot)
+library(ROCR)
+library(tidyverse)
+```
+
+## Load and inspect dataset for unsupervised learning
+```{r}
+# Set the working directory
+setwd("~/Downloads/Coursework WD")
+
+# Read dataset for unsupervised learning
+data_1 <- read.csv("Country-data.csv", header = TRUE)
+
+# Display the first few rows of the dataset
+head(data_1)
+
+# Check the structure of the dataset
+str(data_1)
+```
+
+## Summary statistics
+```{r}
+# Summary of the data set (e.g. mean, median, min, max etc.)
+summary(data_1)
+```
+## Check for Missing Values & Duplicates
+```{r}
+# Checking the missing values in each column and displaying the results
+missing_values <- colSums(is.na(data_1))
+print(missing_values)
+
+# Checking for duplicate values in each column and displaying the results
+duplicates <- sum(duplicated(data_1))
+print(duplicates)
+```
+```{r}
+#Remove country column from dataset 
+data_numeric <- data_1[, -1]
+```
+
+
+## Exploration Data Analysis (EDA)
+
+### Feature Distributions Plot
+```{r}
+# Convert data to long format
+data1_long <- data_numeric %>%
+  pivot_longer(cols = everything(), names_to = "Feature", values_to = "Value")
+
+# Create Histogram Plot
+  ggplot(data1_long, aes(x = Value)) + geom_histogram(bins = 20, fill = "deeppink", color = "black", alpha = 0.5) +
+  
+# Create plot title
+  ggtitle("Features Distributon Plot") + 
+  
+# Create separate plots
+  facet_wrap(~ Feature, scales = "free") + 
+  
+# Apply theme
+  theme_classic() + 
+  
+# Adjust font and font size
+  theme(plot.title = element_text(size = 15, face = "bold", hjust = 0.5))
+```
+## Correlation Matrix Heatmap 
+```{r}
+## Compute Correlation Matrix
+cor_mat <- round(cor(data_numeric), 2)
+cor_mat
+
+## Create a Correlation Matrix Heatmap
+corrplot::corrplot(cor_mat, method = 'color',
+                   order = 'hclust',
+                   type = "upper",
+                   tl.cex = 0.8, tl.srt = 45, tl.col = "black",
+                   addCoef.col = "black",
+                   number.cex = 0.7, 
+                   col = colorRampPalette(c("blue", "white", "#E46726"))(100))
+```
+### Principal Component Analysis (PCA)
+```{r}
+# Set a random seed for reproducibility
+set.seed(123)
+
+# Scale the data
+data_scaled <- scale(data_numeric)
+
+# Peform Principal Component Analysis
+data.pca <- prcomp(data_scaled)
+summary(data.pca)
+
+# Compute the explained variance for each principal component
+explained_var <- data.pca$sdev^2 / sum(data.pca$sdev^2)
+
+# Compute the cumulative variance for each principal component
+  cumulative_var <- cumsum(explained_var)
+
+# Create a data frame for scree plot
+  scree_data_frame <- data.frame(PC = 1:length(explained_var), Variance = explained_var)
+
+# Create a scree plot
+  ggplot(scree_data_frame, aes(x = PC, y = Variance)) + 
+
+# Add points and line
+  geom_point(size = 3, color = "deeppink") +
+  geom_line() +
+
+# Create plot title 
+  ggtitle("Scree Plot") + 
+  xlab("Principal Components") + ylab("Proportion of Variance Explained") + 
+
+# Apply theme
+  theme_classic() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 12))
+```
+### K means clustering
+
+### Elbow Method
+```{r}
+# Set a random seed for reproducibility
+set.seed(123)
+
+# Compute Within-Cluster Sum Of Squares (wss)
+wss <- sapply(1:10, function(k){
+  kmeans(data_scaled, centers = k, nstart = 50, iter.max = 100)$tot.withinss
+})
+wss
+
+# Create a data frame 
+  elbow_df <- data.frame(k = 1:10, wss = wss)
+
+# Plot Elbow Method Scree Plot
+  ggplot(elbow_df, aes (x = k, y = wss)) +
+    
+# Add points and line
+  geom_point(size = 3, color = "deeppink") +
+  geom_line() + 
+  scale_x_continuous(breaks = 1:10) + 
+  
+# Create plot title
+  ggtitle("Elbow Method") + 
+    xlab("Number of Clusters") + ylab("Within-Cluster Sum Of Squares") +
+  
+# Apply theme
+  theme_classic() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 12))
+```
+```{r}
+# Compute average silhouette for K CLUSTERS
+sil <- sapply(2:10, function(k){
+ km <- kmeans(data_scaled, centers = k, nstart = 50, iter.max = 100)
+  ss <- silhouette(km$cluster, dist(data_scaled))
+ mean(ss[, 3])
+ })
+```
+
+### Silhouette Method 
+```{r}
+# Set a random seed for reproducibility
+set.seed(123)
+# Create a data frame for silhouette plot
+sil_df <- data.frame(k = 2:10, silhouette = sil)
+
+# Plot silhouette scores
+ggplot(sil_df, aes (x = k, y = silhouette)) +
+  
+# Add line and points
+  geom_line() + 
+  geom_point(size = 3, color = "deeppink") +
+  
+# Highlight optimal k cluster amount
+  geom_vline(xintercept = 5, color = "red") +
+   scale_x_continuous(breaks = 2:10) + 
+  
+# Create plot title
+  ggtitle("Silhouette Method") + 
+  xlab("Number of Clusters K") + ylab("Average Silhouette Width") +
+  
+# Apply theme
+  theme_classic() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 12))
+
+```
+
+## Apply k-means Clustering
+```{r}
+# Set a random seed for reproducibility
+set.seed(123)
+
+# Perform k-means clustering
+kmeans_1 <- kmeans(data_scaled, centers = 3, nstart = 25)
+kmeans_1
+
+# Display the number of data points
+table(kmeans_1$cluster)
+
+# Convert to a factor
+data_1$cluster <- as.factor(kmeans_1$cluster)
+
+```
+
+### Box plot for cluster analysis
+```{r}
+# Create a series of box plots
+bp <- function(y_var, title){
+  ggplot(data_1, aes(x = factor(cluster), y = .data[[y_var]], fill = factor(cluster))) +
+    geom_boxplot() +
+    
+# Create plot titles and label axis
+    labs(title = title, x = "Cluster", y = y_var) +
+    
+# Apply theme
+    theme_minimal() + scale_fill_brewer(palette="Dark2") +
+    theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 12))
+    }
+
+# Generate box plots
+box_1 <- bp("child_mort","child_mort vs kclusters")
+box_2 <- bp("gdpp","gdpp vs kclusters")
+box_3 <- bp("income", "income vs kclusters")
+box_4 <- bp("life_expec", "life_expec vs kclusters")
+
+# Arrange box plots
+grid.arrange(box_1, box_2, box_3, box_4, ncol = 2)
+
+```
+### Hierarchical Clustering
+```{r}
+# Calculate euclidean distance
+dist_mat <- dist(data_scaled, method = 'euclidean')
+
+# Perform hierarchical clustering using ward's method
+hc <- hclust(dist_mat, method = "ward.D2")
+dend <- as.dendrogram(hc)
+
+# Plot dendrograms
+dend_col <- color_branches(dend, k = 3)
+plot(dend_col, 
+     
+# Add title and label axis
+     main = "Dendrogram using Ward's Method", xlab = " ", ylab = "Height")
+
+# Add red horizontal line to show clusters 
+abline(h = 21, col = "red", lwd = 2)
+
+```
+# Box plots with clusters added
+
+```{r}
+# Cut tree to produce 3 clusters
+clusters_hc <- cutree(hc, k = 3)
+
+# Append to dataset
+dataset_with_hc_clusters <- data_1
+
+# Convert to factor
+dataset_with_hc_clusters$Cluster <- as.factor(clusters_hc)
+
+# Create a series of box plots
+bp_1 <- function(y_var, title){
+  ggplot(dataset_with_hc_clusters, aes(x = factor(Cluster), y = .data[[y_var]], fill = factor(Cluster))) +
+    geom_boxplot() +
+    
+# Create plot titles and label axis
+    labs(title = title, x = "Cluster", y = y_var) +
+    
+# Apply theme
+    theme_minimal() + scale_fill_brewer(palette="Dark2") +
+    
+# Adjust font and font sizes
+    theme(plot.title = element_text(hjust = 0.5), axis.title = element_text(size = 12))
+    }
+
+# Generate box plots
+box_1 <- bp_1("child_mort", "child_mort vs kclusters")
+box_2 <- bp_1("gdpp", "gdpp vs kclusters")
+box_3 <- bp_1("income", "income vs kclusters")
+box_4 <- bp_1("life_expec", "life_expec vs kclusters")
+
+# Arrange box plots
+grid.arrange(box_1, box_2, box_3, box_4, ncol = 2)
+```
+### START OF REGRESSION
+
+# Load and inspect data for regression
+
+```{r}
+# Read dataset for regression
+data_2 <- read.csv("Life Expectancy Data.csv", header = TRUE)
+
+# Display the first few rows of the dataset
+head(data_2)
+
+# Check the structure of the dataset
+str(data_2)
+
+# Compute correlation between infant deaths and under five deaths
+correlation <- cor(data_2$infant.deaths, data_2$under.five.deaths, use = "complete.obs")
+print(correlation)
+```
+## Remove columns from dataset
+```{r}
+# Remove Country column from dataset
+data_2 <- data_2 %>% dplyr::select(-Country)
+
+# Remove Year column from dataset
+data_2 <- data_2 %>% dplyr::select(-Year)
+
+#Remove infant.deaths column from dataset due to high correlation with under five deaths
+data_2 <- data_2 %>% dplyr::select(-infant.deaths)
+```
+
+## Check for Missing Values & Duplicates
+```{r}
+# Checking the missing values in each column and displaying the results
+missing_values_2 <- colSums(is.na(data_2))
+print(missing_values_2)
+
+# Checking for duplicate values in each column and displaying the results
+duplicates_2 <- sum(duplicated(data_2))
+print(duplicates_2)
+```
+
+```{r}
+# Impute the missing data
+data_2 <- data_2 %>%
+mutate(across(where(is.numeric),
+                ~ ifelse(is.na(.),
+                         median(., na.rm = TRUE),
+                         .)))
+
+# Checking for missing values after imputing
+missing_values_2 <- colSums(is.na(data_2))
+print(missing_values_2)
+```
+
+## Distribution
+```{r}
+# Create Histogram Plot
+ggplot(data_2, aes(x = Life.expectancy)) + geom_histogram(aes(y = after_stat(density)), bins = 30, alpha = 0.7, fill = "deeppink", color = "pink") +
+                                                            
+# Add density curve
+  geom_density(color = "black") +
+  
+# Create plot title
+  labs(title = "Distribution", x = "Life Expectancy", y = "Density") +
+  
+# Apply theme
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 12))
+```
+
+## Correlation Matrix Heatmap 
+```{r}
+## Compute Correlation Matrix
+cor_mat2 <- cor(data_2 %>% dplyr::select(where(is.numeric)), use = "pairwise.complete.obs")
+cor_mat2
+
+## Create a Correlation Matrix Heatmap
+corrplot::corrplot(cor_mat2, method = 'color',
+                   order = 'hclust',
+                   type = "upper",
+                   tl.cex = 0.7, tl.srt = 45, tl.col = "black",
+                   addCoef.col = "black",
+                   number.cex = 0.4, col = colorRampPalette(c("blue", "white", "#E46726"))(100))
+```
+
+# Linear Regression
+```{r}
+# Set a random seed for reproducibility
+set.seed(123)
+
+# Train / Test split in 80:20 ratio
+sample_split <- sample.split(data_2$Life.expectancy, SplitRatio = 0.8)
+train_set <- subset(data_2, sample_split == TRUE)
+test_set  <- subset(data_2, sample_split == FALSE)
+
+# Fit the model 
+model <- lm(Life.expectancy ~ ., data = train_set)
+
+# Obtain the summary
+summary(model)
+
+```
+# Predictions and Performance on linear regression
+```{r}
+# Make predictions on test set
+predictions <- predict(model, test_set)
+
+# Compute the Mean Squared Error (MSE) 
+mse <- mean((test_set$Life.expectancy - predictions)^2)
+print(mse)
+
+# Compute Root Mean Squared Error (RMSE)
+rmse <- sqrt(mse)
+print(rmse)
+```
+
+# Plot Linear Regression
+```{r}
+
+linear_results <- data.frame(Actual = test_set$Life.expectancy, Predicted = predictions)
+# Create scatter plot for linear regression
+ggplot(linear_results, aes(x = Actual, y = Predicted)) +
+
+# Add line
+  geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") + 
+  geom_point(color = "deeppink") +
+
+# Create plot title
+  labs(title = "Linear: Actual vs Predicted",
+    x = "Actual", y = "Predicted") +
+  
+# Apply theme
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 15))
+```
+# Polynomial Linear Regression
+```{r}
+# Fit a polynomial regression model
+poly_model <- lm(Life.expectancy ~ poly(GDP, 2) + ., data = train_set)
+
+# Obtain the summary
+summary(poly_model)
+```
+# Predictions and Performance on Polynomial Regression
+```{r}
+# Make predictions on polynomial test set
+poly_predictions <- predict(poly_model, test_set)
+
+# Compute the Mean Squared Error (MSE)
+poly_mse <- mean((test_set$Life.expectancy - poly_predictions)^2)
+print(poly_mse)
+
+# Compute Root Mean Squared Error (RMSE)
+poly_rmse <- sqrt(poly_mse)
+print(poly_rmse)
+
+```
+# Plot Polynomial Regression
+```{r}
+# Create scatter plot for polynomial regression
+poly_results <- data.frame(Actual = test_set$Life.expectancy, Predicted = poly_predictions)
+ggplot(poly_results, aes(x = Actual, y = Predicted)) +
+
+geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") + 
+  geom_point(color = "deeppink") +
+  labs(title = "Poly: Actual vs Predicted",
+    x = "Actual", y = "Predicted") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 15))
+```
+# Regularised Regression
+## Ridge Regression
+```{r}
+# Set a random seed for reproducibility 
+set.seed(123)
+
+# Set up control
+train_control <- trainControl(method = "repeatedcv", 
+                              number = 10) # 10 fold
+
+# Train ridge regression model with K-Fold Cross-Validation
+ridge_model <- train(
+  Life.expectancy ~ ., 
+  data = train_set, 
+  method = "glmnet", 
+  tuneGrid = expand.grid(alpha = 0, lambda = seq(0.001, 1, length = 20)), 
+  trControl = train_control)
+print(ridge_model)
+
+# Make predictions on ridge test set
+ridge_predictions <- predict(ridge_model, test_set)
+
+# Compute the Mean Squared Error (MSE)
+ridge_mse <- mean((test_set$Life.expectancy - ridge_predictions)^2)
+print(ridge_mse)
+
+# Compute Root Mean Squared Error (RMSE)
+ridge_rmse <- sqrt(ridge_mse)
+print(ridge_rmse) 
+
+```
+## Plot ridge regression
+```{r}
+# Create scatter plot for ridge regression
+ridge_results <- data.frame(Actual = test_set$Life.expectancy, Predicted = ridge_predictions)
+ggplot(ridge_results, aes(x = Actual, y = Predicted)) +
+
+geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") + 
+  geom_point(color = "deeppink") +
+  labs(title = "Ridge: Actual vs Predicted",
+    x = "Actual", y = "Predicted") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 15))
+```
+## Lasso Regression 
+```{r}
+# Train a lasso regression model
+lasso_model <- train(
+  Life.expectancy ~ ., 
+  data = train_set,
+  method = "glmnet", 
+  tuneGrid = expand.grid(alpha = 1, lambda = seq(0.001, 1, length = 20)), 
+  trControl = train_control)
+print(lasso_model)
+
+# Make predictions on lasso test set
+lasso_predictions <- predict(lasso_model, test_set)
+
+# Compute the Mean Squared Error (MSE)
+lasso_mse <- mean((test_set$Life.expectancy - lasso_predictions)^2)
+print(lasso_mse)
+
+# Compute Root Mean Squared Error (RMSE)
+lasso_rmse <- sqrt(lasso_mse)
+print(lasso_rmse) 
+
+```
+
+## Lasso Regression Plot
+```{r}
+# Create scatter plot for lasso regression
+lasso_results <- data.frame(Actual = test_set$Life.expectancy, Predicted = lasso_predictions)
+ggplot(lasso_results, aes(x = Actual, y = Predicted)) +
+
+geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") + 
+  geom_point(color = "deeppink") +
+  labs(title = "Lasso: Actual vs Predicted",
+    x = "Actual", y = "Predicted") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 15))
+
+```
+# Random forest
+```{r}
+# Set a random seed for reproducibility 
+set.seed(123)
+
+rf_model <- train(
+  Life.expectancy ~ ., 
+  data = train_set, 
+  method = "rf", 
+  ntree = 300,
+  tuneLength = 3, 
+  trControl = train_control, 
+  importance = TRUE)
+
+print(rf_model)
+
+# Make predictions on random forest test set
+rf_predictions <- predict(rf_model, test_set)
+
+# Compute the Mean Squared Error (MSE)
+rf_mse <- mean((test_set$Life.expectancy - rf_predictions)^2)
+print(rf_mse)
+
+# Compute Root Mean Squared Error (RMSE)
+rf_rmse <- sqrt(rf_mse)
+print(rf_rmse) 
+
+```
+# Random Forest Plot
+```{r}
+# Create scatter plot for Random F  orest 
+rf_results <- data.frame(Actual = test_set$Life.expectancy, Predicted = rf_predictions)
+ggplot(rf_results, aes(x = Actual, y = Predicted)) +
+
+geom_abline(slope = 1, intercept = 0, color = "red", linetype = "dashed") + 
+  geom_point(color = "deeppink") +
+  labs(title = "Random Forest: Actual vs Predicted",
+    x = "Actual", y = "Predicted") +
+  theme_minimal() +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 15))
+
+```
+
+# Compare all models
+```{r}
+model_results <- data.frame(
+  Model = c("Linear", "Polynomial", "Ridge", "Lasso", "Random Forest"), 
+  RMSE = c(rmse, poly_rmse, ridge_rmse, lasso_rmse, rf_rmse))
+
+print(model_results)
+
+```
+# bar plot to compare
+```{r}
+ggplot(model_results, aes(x = Model, y = RMSE, fill = Model)) +
+  geom_col(fill = "deeppink", alpha = 0.7) + 
+  coord_flip() +
+  theme_minimal() +
+  labs(title = "Comparison of Models", y = "RMSE", x = "Model") +
+  theme(plot.title = element_text(size = 20, hjust = 0.5), axis.title = element_text(size = 15))
+  
+```
+
+# Feature Importance
+```{r}
+# Set a seed for reproducibility
+set.seed(123)
+
+# Train a final Random Forest model for feature importance
+importance_rf <- varImp(rf_model)
+print(importance_rf)
+plot(importance_rf, top = 10)
+```
+### Start of Classification
+```{r}
+# Load and inspect data for classification
+# Read dataset for classification
+data_3 <- read.csv("diabetes_binary.csv", header = TRUE)
+
+# Display the first few rows of the dataset
+head(data_3)
+
+# Check the structure of the dataset
+str(data_3)
+
+ # add table fn here *** oi (^_^)
+```
+
+```{r}
+## Check for Missing Values & Duplicates
+# Checking the missing values in each column and displaying the results
+missing_values3 <- colSums(is.na(data_3))
+print(missing_values3)
+
+# Checking for duplicate values in each column and displaying the results
+duplicates_3 <- sum(duplicated(data_3))
+print(duplicates_3)
+```
+# Remove duplicated values
+```{r}
+# Remove duplicated data
+data_3 <- data_3[!duplicated(data_3), ]
+
+# Checking for duplicate values
+duplicates_3 <- sum(duplicated(data_3))
+print(duplicates_3)
+
+table(data_3$class)
+prop.table(table(data_3$class))
+
+```
+
+# Bar chart to show distribution
+```{r}
+# Create a bar chart 
+ggplot(data_3, aes(x = factor(Diabetes_binary), fill = factor(Diabetes_binary))) +
+  geom_bar() +
+  labs(title = "Distribution of Diabetes",
+       x = "0 = No Diabetes, 1 = Diabetes",
+       y = "Count",
+       fill = "Diabetes") +
+  theme_minimal()
+
+
+```
+# Correlation heatmap matrix
+```{r}
+## Compute Correlation Matrix
+cor_mat3 <- cor(data_3 %>% dplyr::select(where(is.numeric)), use = "pairwise.complete.obs")
+cor_mat3
+
+## Create a Correlation Matrix Heatmap
+corrplot::corrplot(cor_mat3, method = 'color',
+                   order = 'hclust',
+        
+                   tl.cex = 0.7, tl.col = "black",
+                   addCoef.col = "black",
+                   number.cex = 0.4, col = colorRampPalette(c("blue", "white", "#E46726"))(100))
+
+```
+
+# Splitting training and testing sets
+```{r}
+# Set seed for reproducibility 
+set.seed(123)
+
+# Split data into 80% training and 20% testing
+train_index <- createDataPartition(data_3$Diabetes_binary, p = 0.8, list = FALSE)
+
+# Create training data set
+train_data <- data_3[train_index, ]
+
+# Create testing data set 
+test_data <- data_3[-train_index, ]
+
+train_data$Diabetes_binary <- factor(train_data$Diabetes_binary,
+                                     levels = c(0,1),
+                                     labels = c("No", "Yes"))
+
+test_data$Diabetes_binary <- factor(test_data$Diabetes_binary,
+                                     levels = c(0,1),
+                                     labels = c("No", "Yes"))
+
+# Check class distribution 
+table(train_data$Diabetes_binary)
+table(test_data$Diabetes_binary)
+```
+
+# Logistic Regression
+```{r}
+  # Train a logistic regression model
+ logit_model <- glm(Diabetes_binary ~ ., data = train_data, family = binomial)
+  
+ logit_prob <- predict(logit_model, newdata = test_data, type = "response")
+ logit_pred <- ifelse(logit_prob > 0.5, "Yes", "No")
+ 
+ logit_pred <- factor(logit_pred)
+ log_actual <- factor(test_data$Diabetes_binary)
+ 
+# Create and print the confusion matrix for logistic regression
+conf_mat_logit <- confusionMatrix(logit_pred, log_actual, positive = "Yes")
+print(conf_mat_logit)
+
+ # Compute ROC
+logit_roc <- roc(test_data$Diabetes_binary, logit_prob)
+
+```
+
+# Random forest
+```{r}
+# Set up control
+train_data$Diabetes_binary <- factor(train_data$Diabetes_binary)
+test_data$Diabetes_binary <- factor(test_data$Diabetes_binary)
+```
+
+# Training a Random Forest (RF) model
+```{r}
+# Train a random forest model
+rf_model <- randomForest(Diabetes_binary ~., data = train_data, ntree = 300)
+
+rf_pred <- predict(rf_model, newdata = test_data)
+
+rf_prob <- predict(rf_model, newdata = test_data, type = "prob")[, "Yes"]
+
+# Create and print the confusion matrix for RF
+conf_mat_rf <- confusionMatrix(rf_pred, test_data$Diabetes_binary, positive = "Yes")
+print(conf_mat_rf)
+
+# Compute ROC
+rf_roc <- roc(test_data$Diabetes_binary, rf_prob)
+```
+
+# K-Nearest Neighbour (K-NN)
+```{r}
+# Scaling the results
+preprocess <- preProcess(train_data[, -which(names(train_data) == "Diabetes_binary")],
+                        method = c("center", "scale"))
+
+train_data_scaled <- predict(preprocess, train_data)
+test_data_scaled  <- predict(preprocess, test_data)
+
+```
+
+```{r}
+# Set seed for reproducibility
+set.seed(123)
+
+# Train a K-NN model 
+knn_pred <- knn(
+  train = train_data_scaled[, -which(names(train_data_scaled) == "Diabetes_binary")],
+  test = test_data_scaled[, -which(names(test_data_scaled) == "Diabetes_binary")],
+  cl = train_data_scaled$Diabetes_binary,
+  k = 5,
+  prob = TRUE 
+)
+
+# Create and print a confusion matrix for K-NN
+conf_mat_knn <- confusionMatrix(
+  knn_pred,
+  test_data_scaled$Diabetes_binary,
+  positive = "Yes"
+)
+
+
+knn_prob <- attr(knn_pred, "prob")
+knn_prob <- ifelse(knn_pred == "Yes", knn_prob, 1 - knn_prob)
+
+# Compute ROC
+knn_roc <- roc(test_data_scaled$Diabetes_binary, knn_prob)
+
+```
+
+# Support Vector Machine (SVM) 
+```{r} 
+# Set seed for reproducibility
+set.seed(123)
+
+# Sample data set
+train_small <- train_data[sample(1:nrow(train_data), 5000),]
+
+# Train a SVM model
+svm_model <- svm(
+  Diabetes_binary ~ .,
+  data = train_small,
+  kernel = "radial",
+  probability = TRUE
+)
+
+# Predict 
+svm_pred <- predict(svm_model, newdata = test_data, probability = TRUE)
+
+# Probabilities
+svm_prob_attr <- attr(svm_pred, "probabilities")
+svm_prob <- svm_prob_attr[, "Yes"]
+
+svm_pred <- factor(svm_pred, levels = levels(test_data$Diabetes_binary))
+
+# Create and print the confusion matrix for SVM
+conf_mat_svm <- confusionMatrix(
+  svm_pred,
+  test_data$Diabetes_binary,
+  positive = "Yes"
+)
+print(conf_mat_svm)
+
+ # Compute ROC
+svm_roc <- roc(test_data$Diabetes_binary, svm_prob)
+
+```
+
+# Plot curves
+```{r}
+# Plot ROC curves for all models
+
+plot(logit_roc, col = "blue", main = "ROC Curves for All Models", legacy.axes = TRUE, xaxs = "i", lwd = 2)
+
+plot(rf_roc, col = "deeppink", add = TRUE, lwd = 2)
+
+plot(knn_roc, col = "orange", add = TRUE, lwd = 2)
+
+plot(svm_roc, col = "purple", add = TRUE, lwd = 2)
+
+legend("bottomright",
+       legend = c("Logistic Regression", "Random Forest", "K-NN", "SVM"),
+       col = c("blue", "deeppink", "orange", "purple"),
+       lwd = 2)
+
+```
+
+# Compute Area Under Curve (AUC) and F1
+```{r}
+# Collect metrics
+model_metrics <- data.frame(
+  Model = c("Logistic Regression", "Random Forest", "KNN", "SVM"),
+
+  Accuracy = c(
+    confusionMatrix(logit_pred, test_data$Diabetes_binary)$overall["Accuracy"],
+    confusionMatrix(rf_pred, test_data$Diabetes_binary)$overall["Accuracy"],
+    conf_mat_knn$overall["Accuracy"],
+    conf_mat_svm$overall["Accuracy"]
+  ),
+
+  F1_Score = c(
+    confusionMatrix(logit_pred, test_data$Diabetes_binary)$byClass["F1"],
+    confusionMatrix(rf_pred, test_data$Diabetes_binary)$byClass["F1"],
+    conf_mat_knn$byClass["F1"],
+    conf_mat_svm$byClass["F1"]
+  ),
+
+  ROC_AUC = c(
+    auc(logit_roc),
+    auc(rf_roc),
+    auc(knn_roc),
+    auc(svm_roc)
+  )
+)
+
+# View results
+print(model_metrics)
+
+```
+
+```{r}
+# Plot Accuracy
+ggplot(model_metrics, aes(x = Model, y = Accuracy, fill = Model)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Accuracy Comparison", y = "Accuracy") +
+  theme_minimal()
+
+# Plot F1 Score
+ggplot(model_metrics, aes(x = Model, y = F1_Score, fill = Model)) +
+  geom_bar(stat = "identity") +
+  labs(title = "F1 Score Comparison", y = "F1 Score") +
+  theme_minimal()
+
+# Plot ROC auc
+ggplot(model_metrics, aes(x = Model, y = ROC_AUC, fill = Model)) +
+  geom_bar(stat = "identity") +
+  labs(title = "ROC AUC Comparison", y = "AUC") + 
+  theme_minimal()
+```
+
+
+
+
+
