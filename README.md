@@ -1,33 +1,53 @@
 # Applied Machine Learning Analysis
 
-This repository contains three machine learning projects implemented in R using real-world datasets.
+Machine learning projects implemented in R using real-world datasets, covering unsupervised learning, regression, and classification.
 
 ## Unsupervised Learning
-- Principal Component Analysis (PCA)
+
+**Objective:** Cluster countries based on socioeconomic and health indicators.
+
+**Techniques:**
+- PCA
 - K-Means Clustering
 - Hierarchical Clustering
 
-Dataset:
-- Country socioeconomic and health indicators
+**Dataset:** Country socioeconomic and health indicators (167 countries, 10 features)
 
-## Regression
+---
+
+## Regression Analysis
+
+**Objective:** Predict life expectancy and identify key influencing factors.
+
+**Techniques:**
 - Linear Regression
 - Polynomial Regression
 - Ridge Regression
 - Lasso Regression
 - Random Forest
 
-Dataset:
-- WHO Life Expectancy dataset
+**Dataset:** WHO Life Expectancy Dataset (193 countries, 22 features)
 
-## Classification
+---
+
+## Classification Analysis
+
+**Objective:** Predict diabetes risk using demographic, lifestyle, and health-related factors.
+
+**Techniques:**
 - Logistic Regression
 - Random Forest
 - K-Nearest Neighbours (K-NN)
 - Support Vector Machine (SVM)
 
-Dataset:
-- Diabetes prediction dataset
+**Evaluation Metrics:**
+- Accuracy
+- F1-Score
+- ROC-AUC
+
+**Dataset:** Diabetes Risk Dataset (22 variables)
+
+---
 
 ## Tools
 - R
